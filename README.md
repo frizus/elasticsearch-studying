@@ -19,7 +19,7 @@ make up # запускает сервер на http://localhost:8080
 ```
 
 ## Использование
-* http://localhost:8080/ - агрегатор
+* http://localhost:8080/ - проект
 * Kibana http://localhost:5601
     * имя пользователя
     * пароль `kibana_password` (`KIBANA_PASSWORD` из `.env`)
