@@ -1,0 +1,123 @@
+services:
+  kibana:
+    image: kibana:8.15.0
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_URL: http://elastic-search:9200
+      ELASTICSEARCH_HOSTS: http://elastic-search:9200
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_PASSWORD}
+      xpack.security.enabled: false
+      xpack.license.self_generated.type: trial
+    depends_on:
+      - elastic-search
+  elastic-search:
+    image: elasticsearch:8.15.0
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      discovery.type: single-node
+      xpack.security.http.ssl.enabled: false
+      xpack.license.self_generated.type: trial
+  db:
+    image: mysql:8.4.2
+    volumes_from:
+      - disk
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    tty: true
+    stdin_open: true
+  php:
+    build:
+      context: "./docker/php"
+      dockerfile: Dockerfile
+      args:
+        - SITE_EDITOR_GID=${SITE_EDITOR_GID}
+        - DOCKER_USER_UID_GID=${DOCKER_USER_UID_GID}
+        - DOCKER_WEB_USER=${DOCKER_WEB_USER}
+        - PHP_VERSION=${PHP_VERSION}
+        - PROJECT_ROOT=${PROJECT_ROOT}
+        - PUBLIC_ROOT=${PUBLIC_ROOT}
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PORT: 3306
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      POSTGRES_PORT: 5432
+      PHP_IDE_CONFIG: serverName=xdebug-server
+      ELASTIC_HOST: elastic-search
+      ELASTIC_PORT: 9200
+      ELASTIC_USER: elastic
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes_from:
+      - elastic-search
+      - disk
+    command: /bin/bash -i -c "
+      php-fpm -F
+      "
+    ports:
+      - ":9000"
+    depends_on:
+      - db
+    restart: "no"
+    tty: true
+    stdin_open: true
+  nginx:
+    build:
+      context: "./docker/nginx"
+      dockerfile: Dockerfile
+      args:
+        - SITE_EDITOR_GID=${SITE_EDITOR_GID}
+        - DOCKER_USER_UID_GID=${DOCKER_USER_UID_GID}
+        - DOCKER_WEB_USER=${DOCKER_WEB_USER}
+        - NGINX_VERSION=${NGINX_VERSION}
+        - NGINX_PORT=${NGINX_PORT}
+        - NGINX_HOST=${NGINX_HOST}
+        - PROJECT_ROOT=${PROJECT_ROOT}
+        - PUBLIC_ROOT=${PUBLIC_ROOT}
+    volumes_from:
+      - disk
+    command: [nginx, "-g", "daemon off;"]
+    ports:
+      - "8080:${NGINX_PORT}"
+    environment:
+      - NGINX_HOST=${NGINX_HOST}
+      - NGINX_PORT=${NGINX_PORT}
+    depends_on:
+      - php
+    tty: true
+    stdin_open: true
+  disk:
+    image: ubuntu:24.04
+    volumes:
+      - ./app:${PROJECT_ROOT}
+      - ./db-data:/var/lib/mysql
+      - ./log/nginx:/var/log/nginx
+      - ./log/php:/var/log/php
+    # https://www.baeldung.com/ops/docker-compose-multiple-commands#1-using-the-ampamp-operator
+    # TODO одноразовый запуск правки прав для проекта
+    command: /bin/bash -c "
+      chgrp -R ${SITE_EDITOR_GID} ${PROJECT_ROOT};
+      find ${PROJECT_ROOT} -type d -exec chmod 2775 -- {} +;
+      chmod u+x,g+x ${PROJECT_ROOT}/artisan;
+      chgrp ${SITE_EDITOR_GID} /var/log/nginx;
+      find /var/log/nginx -type d -exec chmod g+rwx -- {} +;
+      find /var/log/nginx -type f -exec chmod g+rw -- {} +;
+      find /var/log/nginx -type f -exec chgrp ${SITE_EDITOR_GID} -- {} +;
+      chgrp ${SITE_EDITOR_GID} /var/log/php;
+      find /var/log/php -type d -exec chmod g+rwx -- {} +;
+      find /var/log/php -type f -exec chmod g+rw -- {} +;
+      find /var/log/php -type f -exec chgrp ${SITE_EDITOR_GID} -- {} +;
+      "
+    restart: "no"
