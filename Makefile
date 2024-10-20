@@ -53,6 +53,8 @@ connect-db:
 connect-elastic-search:
 	docker-compose exec -it elastic-search bash
 
+restart: down up
+
 connect-es: connect-elastic-search
 
 install: setup
