@@ -8,8 +8,6 @@ services:
       ELASTICSEARCH_HOSTS: http://elastic-search:9200
       ELASTICSEARCH_USERNAME: kibana_system
       ELASTICSEARCH_PASSWORD: ${KIBANA_PASSWORD}
-      xpack.security.enabled: false
-      xpack.license.self_generated.type: trial
     depends_on:
       - elastic-search
   elastic-search:
@@ -20,6 +18,7 @@ services:
     environment:
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
       discovery.type: single-node
+      xpack.security.enabled: false
       xpack.security.http.ssl.enabled: false
       xpack.license.self_generated.type: trial
   db:
